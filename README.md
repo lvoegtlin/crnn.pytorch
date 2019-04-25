@@ -1,3 +1,5 @@
+Original code from: https://github.com/zhiqwang/crnn.pytorch
+
 # Convolutional Recurrent Neural Network
 
 This software implements the Convolutional Recurrent Neural Network (CRNN) in pytorch in paper:

@@ -63,3 +63,7 @@ LOCK
 LOG*
 CURRENT
 MANIFEST-*
+
+# intelliJ
+.idea
+*.iml
