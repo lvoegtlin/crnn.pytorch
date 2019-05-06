@@ -17,11 +17,11 @@ device = torch.device("cpu")
 model_path = './checkpoint/model/mobilenetv2_cifar_pretrained.pth'
 # model_path = './checkpoint/model/densenet121_pretrained.pth'
 
-model_params = {}
-model_params['architecture'] = "mobilenetv2_cifar"
-model_params['num_classes'] = len(alphabet) + 1
-model_params['mean'] = (0.5,)
-model_params['std'] = (0.5,)
+model_params = {'architecture': "mobilenetv2_cifar",
+                'num_classes': len(alphabet) + 1,
+                'mean': (0.5,),
+                'std': (0.5,)
+                }
 model = init_network(model_params)
 model = model.to(device)
 
