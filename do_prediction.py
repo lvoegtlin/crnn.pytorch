@@ -7,17 +7,17 @@ from datasets.datahelpers import default_loader
 from utils.converter import LabelConverter
 
 # load alphabet from file
-alphabet = ''
-with open('./data/alphabet_decode_5990.txt', mode='r', encoding='utf-8') as f:
-    for line in f.readlines():
-        alphabet += line.strip()
+alphabet = '0123456789'
+# with open('./data/alphabet_decode_5990.txt', mode='r', encoding='utf-8') as f:
+#     for line in f.readlines():
+#         alphabet += line.strip()
 
-img_name = './data/images/00000002.jpg'
+img_name = './data/number_sequence/images/00001_19767937455632.jpg'
 device = torch.device("cpu")
-model_path = './checkpoint/model/mobilenetv2_cifar_pretrained.pth'
+model_path = './checkpoint/densenet_cifar_rmsprop_lr1.0e-03_wd5.0e-04_bsize64_height32_width200/densenet_cifar_best.pth.tar'
 # model_path = './checkpoint/model/densenet121_pretrained.pth'
 
-model_params = {'architecture': "mobilenetv2_cifar",
+model_params = {'architecture': "densenet_cifar",
                 'num_classes': len(alphabet) + 1,
                 'mean': (0.5,),
                 'std': (0.5,)
@@ -27,7 +27,7 @@ model = model.to(device)
 
 # load checkpoint
 checkpoint = torch.load(model_path, map_location=device)
-model.load_state_dict(checkpoint)
+model.load_state_dict(checkpoint['state_dict'])
 
 converter = LabelConverter(alphabet, ignore_case=False)
 

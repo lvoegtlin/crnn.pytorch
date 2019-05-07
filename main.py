@@ -120,12 +120,11 @@ def main():
                 alphabet += line.strip()
         args.alphabet = alphabet
 
-    model_params = {}
-    model_params['architecture'] = args.arch
-    model_params['num_classes'] = len(args.alphabet) + 1  # Number of classes (excluding blank)
+    model_params = {'architecture': args.arch,
+                    'num_classes': len(args.alphabet) + 1,
+                    'pretrained': args.pretrained}
     # model_params['mean'] = (0.5,)
     # model_params['std'] = (0.5,)
-    model_params['pretrained'] = args.pretrained
     model = init_network(model_params)
     model = model.to(device)
 
@@ -172,7 +171,6 @@ def main():
     # gamma_decay = 0.5
     # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=step_decay, gamma=gamma_decay)
 
-    is_best = False
     best_accuracy = 0.0
     accuracy = 0.0
     start_epoch = 0
