@@ -150,8 +150,8 @@ def main():
                                  collate_fn=dev_collate, shuffle=False,
                                  num_workers=args.workers, pin_memory=(not args.keep_ratio))
 
-    criterion = nn.CTCLoss()
-    # criterion = nn.CTCLoss(zero_infinity=True)
+    # criterion = nn.CTCLoss()
+    criterion = nn.CTCLoss(zero_infinity=True)
     criterion = criterion.to(device)
     # Define optimizer
     if args.optimizer == 'sgd':
@@ -311,11 +311,11 @@ def validate(dev_loader, model, epoch, converter):
             for image in images:
                 image = image.unsqueeze(0).to(device)
                 log_prob = model(image)
-                preds.append(converter.best_path_decode(log_prob, strings=False))
+                preds.append(converter.best_path_decode(log_prob, strings=False)[0])
         else:  # Batch
             images = images.to(device)
             log_probs = model(images)
-            preds = converter.best_path_decode(log_probs, strings=False)
+            preds, _ = converter.best_path_decode(log_probs, strings=False)
 
         # Measure elapsed time
         batch_time.update(time.time() - end)
