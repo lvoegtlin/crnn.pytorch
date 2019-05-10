@@ -94,4 +94,4 @@ class LabelConverter(object):
         _, probs = probs.max(2)
         probs = probs.transpose(1, 0).contiguous().reshape(-1)
         preds = self.decode(probs, lengths, raw=raw, strings=strings)
-        return preds
+        return preds, probs
