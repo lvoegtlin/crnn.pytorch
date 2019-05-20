@@ -271,8 +271,8 @@ def train(train_loader, model, criterion, optimizer, epoch, converter, writer):
             preds = []
             for image in images:
                 image = image.unsqueeze(0).to(device)
-                log_prob = model(image).squeeze(1)
-                log_probs.append(log_prob)
+                log_prob = model(image)  # .squeeze(1)
+                log_probs.append(log_prob.squeeze(1))
                 preds.append(converter.best_path_decode(log_prob, strings=False)[0])
 
             input_lengths = torch.IntTensor([i.size(0) for i in log_probs]).to(device)
