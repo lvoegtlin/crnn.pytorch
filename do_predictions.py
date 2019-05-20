@@ -1,4 +1,6 @@
 import os
+from multiprocessing import cpu_count
+from multiprocessing.pool import Pool
 
 import matplotlib.pyplot as plt
 
@@ -7,6 +9,7 @@ import torchvision.transforms as transforms
 from models.crnn import init_network
 from datasets.datahelpers import default_loader
 from utils.converter import LabelConverter
+import itertools
 
 import argparse
 import models
@@ -69,6 +72,14 @@ class Prediction:
         return [str(n) for n in probs.numpy() if n != 0 and n != '\n'], preds
 
 
+def execute(file_path, root_path, output_path, predictor):
+    _, prediction = predictor.predict(os.path.join(root_path, file_path))
+    file_name, _ = os.path.splitext(file_path)
+    # write file
+    with open(os.path.join(output_path, file_name + '.txt'), mode='w') as f:
+        f.write(prediction)
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="Prediction")
@@ -89,18 +100,16 @@ if __name__ == '__main__':
     if not os.path.exists(args.output_path):
         os.makedirs(args.output_path)
 
+    # multithread
+    pool = Pool(processes=cpu_count())
+
     predictor = Prediction(alphabet_path=args.alphabet, model_path=args.model_path, model_arch=args.arch)
 
     # get all image files in output folder
     for root, _, files in os.walk(args.input_images):
-        for file in files:
-            if '.jpg' in file:
-                _, prediction = predictor.predict(os.path.join(root, file))
-                file_name, _ = os.path.splitext(file)
-                # write file
-                with open(os.path.join(args.output_path, file_name + '.txt'), mode='w') as f:
-                    f.write(prediction)
-
-    # Prediction(alphabet_path='./data/comp_alphabet.txt',
-    #            model_path='./checkpoint/densenet121_adam_lr1.0e-03_wd5.0e-04_dataset_comp_set_alphabet_comp_alphabet_bsize32_height32_width20/densenet121_best.pth.tar',
-    #            model_arch="densenet121").predict(input_image='./data/images/004708932_00056_l0.jpg')
+        files = filter(lambda x: '.jpg' in x, files)
+        pool.starmap(execute, zip(files,
+                                  itertools.repeat(root),
+                                  itertools.repeat(args.output_path),
+                                  itertools.repeat(predictor)))
+    pool.close()
