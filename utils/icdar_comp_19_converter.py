@@ -89,21 +89,23 @@ if __name__ == '__main__':
 
     converter = LabelConverter(alphabet_string, ignore_case=False)
 
+    files_list = []
     for root, _, files in os.walk(args.dataset_folder):
-        print("walking done. Found " + str(len(files)) + " files")
-        i = 0
-        for file in tqdm(files, ncols=150):
-            file_path = os.path.join(root, file)
-            # print("File nr: {} and name: {}".format(i, file))
-            if ".txt" in file and "ground_truth.txt" not in file:
-                if args.alphabet:
-                    enrich_alphabet(file_path, alphabet_string, args.alphabet)
-                    alphabet_string = create_alphabet_string(args.alphabet)
-                    converter = LabelConverter(alphabet_string, ignore_case=False)
-                # write gt file
-                add_to_gt_file(file_path, converter, gt_path)
-            elif ".jpg" in file:
-                shutil.copy(os.path.join(root, file), os.path.join(args.output_path, "images", file))
-            i += 1
+        files_list.append(files)
 
-    split_dataset(args.output_path)
+    print("walking done. Found " + str(len(files)) + " files")
+
+    for file in tqdm(files, ncols=150):
+        file_path = os.path.join(root, file)
+        # print("File nr: {} and name: {}".format(i, file))
+        if ".txt" in file and "ground_truth.txt" not in file:
+            if args.alphabet:
+                enrich_alphabet(file_path, alphabet_string, args.alphabet)
+                alphabet_string = create_alphabet_string(args.alphabet)
+                converter = LabelConverter(alphabet_string, ignore_case=False)
+            # write gt file
+            add_to_gt_file(file_path, converter, gt_path)
+        elif ".jpg" in file:
+            shutil.copy(os.path.join(root, file), os.path.join(args.output_path, "images", file))
+
+    split_dataset(gt_path)
