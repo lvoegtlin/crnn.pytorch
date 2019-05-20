@@ -51,6 +51,7 @@ class DigitsBatchTrain:
         else:
             self.images = torch.stack(transposed_data[0], 0)
         self.targets = torch.cat(transposed_data[1], 0)
+        # length of the each target string
         self.targets_single = transposed_data[1]
         self.target_lengths = torch.IntTensor([len(i) for i in transposed_data[1]])
 
