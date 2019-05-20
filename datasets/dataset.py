@@ -51,6 +51,7 @@ class DigitsBatchTrain:
         else:
             self.images = torch.stack(transposed_data[0], 0)
         self.targets = torch.cat(transposed_data[1], 0)
+        self.targets_single = transposed_data[1]
         self.target_lengths = torch.IntTensor([len(i) for i in transposed_data[1]])
 
     def pin_memory(self):
@@ -69,6 +70,7 @@ class DigitsBatchDev:
         else:
             self.images = torch.stack(transposed_data[0], 0)
         self.targets = [i.tolist() for i in transposed_data[1]]
+        self.target_lengths = torch.IntTensor([len(i) for i in transposed_data[1]])
 
     def pin_memory(self):
         self.images = self.images.pin_memory()

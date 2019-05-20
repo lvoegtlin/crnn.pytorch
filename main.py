@@ -1,3 +1,4 @@
+import json
 import os
 import argparse
 import time
@@ -9,6 +10,7 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
+from tensorboardX import SummaryWriter
 import torch.utils.data as data
 import torchvision.transforms as transforms
 
@@ -19,10 +21,9 @@ import models
 from models.crnn import init_network
 
 import warnings
+
 warnings.filterwarnings("always")
 
-# from tensorboardX import SummaryWriter
-# writer = SummaryWriter('./data/runs')
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__") and callable(models.__dict__[name]))
 optimizer_names = ["sgd", "adam", "rmsprop"]
@@ -96,15 +97,21 @@ def main():
         torch.backends.cudnn.benchmark = True
 
     # Create export dir if it doesnt exist
-    directory = "{}".format(args.arch)
-    directory += "_{}_lr{:.1e}_wd{:.1e}".format(args.optimizer, args.lr, args.weight_decay)
-    directory += "_bsize{}_height{}".format(args.batch_size, args.height)
-    directory += "_keep_ratio" if args.keep_ratio else "_width{}".format(args.width)
+    directory = os.path.join("{}".format(args.arch),
+                             "{}_lr{:.1e}_wd{:.1e}".format(args.optimizer, args.lr, args.weight_decay),
+                             "dataset_{}_alphabet_{}".format(os.path.split(args.dataset_root)[-1],
+                                                             os.path.splitext(os.path.basename(args.alphabet))[0]),
+                             "bsize{}_height{}".format(args.batch_size, args.height),
+                             "keep_ratio" if args.keep_ratio else "_width{}".format(args.width),
+                             "{}".format(time.strftime('%d-%m-%y-%Hh-%Mm-%Ss')))
 
     args.directory = os.path.join(args.directory, directory)
     print(">> Creating directory if it does not exist:\n>> '{}'".format(args.directory))
     if not os.path.exists(args.directory):
         os.makedirs(args.directory)
+
+    # set up writer
+    writer = set_up_tensorbord(args.directory, args.__dict__)
 
     # initialize model
     if args.pretrained:
@@ -190,7 +197,7 @@ def main():
                 print('>>>> Test model, using model at epoch: {}'.format(start_epoch))
                 start_epoch -= 1
                 with torch.no_grad():
-                    accuracy = validate(dev_loader, model, start_epoch, converter)
+                    accuracy = validate(dev_loader, model, start_epoch, converter, writer)
                 print('>>>> Accuracy: {}'.format(accuracy))
                 return
             best_accuracy = checkpoint['best_accuracy']
@@ -205,12 +212,12 @@ def main():
         scheduler.step()
 
         # Train for one epoch on train set
-        _ = train(train_loader, model, criterion, optimizer, epoch)
+        _ = train(train_loader, model, criterion, optimizer, epoch, converter, writer)
 
         # Evaluate on validation set
         if (epoch + 1) % args.validate_interval == 0:
             with torch.no_grad():
-                accuracy = validate(dev_loader, model, epoch, converter)
+                accuracy = validate(dev_loader, model, epoch, converter, writer)
 
         # # Evaluate on test datasets every test_freq epochs
         # if (epoch + 1) % args.test_freq == 0:
@@ -231,10 +238,14 @@ def main():
             }, is_best, args.directory)
 
 
-def train(train_loader, model, criterion, optimizer, epoch):
+def train(train_loader, model, criterion, optimizer, epoch, converter, writer):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
+    acc_meter_sentence = AverageMeter()
+
+    num_correct_sentence = 0
+    num_verified_sentence = 0
 
     # Switch to train mode
     model.train()
@@ -251,22 +262,26 @@ def train(train_loader, model, criterion, optimizer, epoch):
         # targets is a list of `torch.IntTensor` with `batch_size` size.
         target_lengths = sample.target_lengths.to(device)
         targets = sample.targets  # Expected targets to have CPU Backend
+        targets = targets.to(device)
 
         # step 3. Run out forward pass.
         images = sample.images
         if isinstance(images, tuple):
-            targets = targets.to(device)
             log_probs = []
+            preds = []
             for image in images:
                 image = image.unsqueeze(0).to(device)
                 log_prob = model(image).squeeze(1)
                 log_probs.append(log_prob)
+                preds.append(converter.best_path_decode(log_prob, strings=False)[0])
+
             input_lengths = torch.IntTensor([i.size(0) for i in log_probs]).to(device)
             log_probs = pad_sequence(log_probs)
         else:  # Batch
             images = images.to(device)
             log_probs = model(images)
             input_lengths = torch.full((images.size(0),), log_probs.size(0), dtype=torch.int32, device=device)
+            preds, _ = converter.best_path_decode(log_probs, strings=False)
 
         # step 4. Compute the loss, gradients, and update the parameters
         # by calling optimizer.step()
@@ -281,18 +296,35 @@ def train(train_loader, model, criterion, optimizer, epoch):
         batch_time.update(time.time() - end)
         end = time.time()
 
+        # acc calc
+        targets = sample.targets_single
+        num_verified_sentence += len(targets)
+        for pred, target in zip(preds, targets):
+            target = target.tolist()
+            if pred == target:
+                num_correct_sentence += 1
+
+        acc_meter_sentence.update(num_correct_sentence / num_verified_sentence)
+
+        # loss and accuracy to tensorboard
+        writer.add_scalar('train/mb_loss', loss.item(), epoch * len(train_loader) + i)
+        writer.add_scalar('train/mb_accuracy', num_correct_sentence / num_verified_sentence, epoch * len(train_loader) + i)
+
         if (i + 1) % args.print_freq == 0 or i == 0 or (i + 1) == len(train_loader):
             print('>> Train: [{0}][{1}/{2}]\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})'.format(
-                      epoch + 1, i + 1, len(train_loader), batch_time=batch_time,
-                      data_time=data_time, loss=losses))
+                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                  'Sentence Acc {acc_meter.val:.4f}'.format(
+                epoch + 1, i + 1, len(train_loader), batch_time=batch_time,
+                data_time=data_time, loss=losses, acc_meter=acc_meter_sentence))
+
+    writer.add_scalar('train/accuracy', acc_meter_sentence.avg, epoch)
 
     return losses.avg
 
 
-def validate(dev_loader, model, epoch, converter):
+def validate(dev_loader, model, epoch, converter, writer):
     batch_time = AverageMeter()
     accuracy = AverageMeter()
 
@@ -306,12 +338,14 @@ def validate(dev_loader, model, epoch, converter):
     for i, sample in enumerate(dev_loader):
         images = sample.images
         targets = sample.targets
+
         if isinstance(images, tuple):
             preds = []
             for image in images:
                 image = image.unsqueeze(0).to(device)
                 log_prob = model(image)
                 preds.append(converter.best_path_decode(log_prob, strings=False)[0])
+            log_probs = pad_sequence(log_probs)
         else:  # Batch
             images = images.to(device)
             log_probs = model(images)
@@ -326,11 +360,15 @@ def validate(dev_loader, model, epoch, converter):
                 num_correct += 1
         accuracy.update(num_correct / num_verified)
 
+        # tensorboard
+        writer.add_scalar('valid/mb_accuracy', num_correct / num_verified,
+                          epoch * len(dev_loader) + i)
+
         if (i + 1) % args.print_freq == 0 or i == 0 or (i + 1) == len(dev_loader):
             print('>> Val: [{0}][{1}/{2}]\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Accu {accuracy.val:.3f}'.format(
-                      epoch + 1, i + 1, len(dev_loader), batch_time=batch_time, accuracy=accuracy))
+                epoch + 1, i + 1, len(dev_loader), batch_time=batch_time, accuracy=accuracy))
 
     return accuracy.val
 
@@ -350,6 +388,7 @@ def save_checkpoint(state, is_best, directory):
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.reset()
 
@@ -380,6 +419,14 @@ def set_batchnorm_eval(m):
         # # that is why next two lines are commented
         # for p in m.parameters():
         #     p.requires_grad = False
+
+
+def set_up_tensorbord(log_folder, args_dict):
+    # Add all parameters to Tensorboard
+    writer = SummaryWriter(log_dir=log_folder)
+    writer.add_text('Args', json.dumps(args_dict))
+
+    return writer
 
 
 if __name__ == '__main__':
