@@ -52,7 +52,7 @@ def parse_args():
                         help='save a model')
     parser.add_argument('--workers', default=4, type=int,
                         help='number of data loading workers (default: 4)')
-    parser.add_argument('--batch-size', type=int, default=64,
+    parser.add_argument('--batch-size', type=int, default=32,
                         help='batch size to train a model')
     parser.add_argument('--train-samples', default=640000, type=int,
                         help='train sample number')
