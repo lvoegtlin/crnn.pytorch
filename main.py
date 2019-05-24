@@ -184,7 +184,7 @@ def main():
 
     # optionally resume from a checkpoint
     if args.resume:
-        args.resume = os.path.join(args.directory, args.resume)
+        # args.resume = os.path.join(args.directory, args.resume)
         if os.path.isfile(args.resume):
             # load checkpoint weights and update model and optimizer
             print(">> Loading checkpoint:\n>> '{}'".format(args.resume))
@@ -262,11 +262,12 @@ def train(train_loader, model, criterion, optimizer, epoch, converter, writer):
         # targets is a list of `torch.IntTensor` with `batch_size` size.
         target_lengths = sample.target_lengths.to(device)
         targets = sample.targets  # Expected targets to have CPU Backend
-        targets = targets.to(device)
+        targets = targets.to(device)  # If you get a cuda error that the backand should be CPU move it to @1
 
         # step 3. Run out forward pass.
         images = sample.images
         if isinstance(images, tuple):
+            # here @1
             log_probs = []
             preds = []
             for image in images:
