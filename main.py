@@ -262,12 +262,12 @@ def train(train_loader, model, criterion, optimizer, epoch, converter, writer):
         # targets is a list of `torch.IntTensor` with `batch_size` size.
         target_lengths = sample.target_lengths.to(device)
         targets = sample.targets  # Expected targets to have CPU Backend
-        # targets = targets.to(device)  # If you get a cuda error that the backand should be CPU move it to @1
+        targets = targets.to(device)  # If you get a cuda error that the backend should be CPU move it to @1
 
         # step 3. Run out forward pass.
         images = sample.images
         if isinstance(images, tuple):
-            targets = targets.to(device)  # here @1
+            # targets = targets.to(device)  # here @1
             log_probs = []
             preds = []
             for image in images:
