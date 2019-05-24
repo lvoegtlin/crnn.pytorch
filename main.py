@@ -262,12 +262,12 @@ def train(train_loader, model, criterion, optimizer, epoch, converter, writer):
         # targets is a list of `torch.IntTensor` with `batch_size` size.
         target_lengths = sample.target_lengths.to(device)
         targets = sample.targets  # Expected targets to have CPU Backend
-        targets = targets.to(device)  # If you get a cuda error that the backand should be CPU move it to @1
+        # targets = targets.to(device)  # If you get a cuda error that the backand should be CPU move it to @1
 
         # step 3. Run out forward pass.
         images = sample.images
         if isinstance(images, tuple):
-            # here @1
+            targets = targets.to(device)  # here @1
             log_probs = []
             preds = []
             for image in images:
@@ -336,27 +336,31 @@ def validate(dev_loader, model, epoch, converter, writer):
     num_verified = 0
     end = time.time()
 
+    # whole dataset
+    targets = []
+    preds = []
+
     for i, sample in enumerate(dev_loader):
         images = sample.images
         targets = sample.targets
 
         if isinstance(images, tuple):
-            preds = []
+            preds_batch = []
             for image in images:
                 image = image.unsqueeze(0).to(device)
                 log_prob = model(image)
-                preds.append(converter.best_path_decode(log_prob, strings=False)[0])
+                preds_batch.append(converter.best_path_decode(log_prob, strings=False)[0])
             log_probs = pad_sequence(log_probs)
         else:  # Batch
             images = images.to(device)
             log_probs = model(images)
-            preds, _ = converter.best_path_decode(log_probs, strings=False)
+            preds_batch, _ = converter.best_path_decode(log_probs, strings=False)
 
         # Measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
         num_verified += len(targets)
-        for pred, target in zip(preds, targets):
+        for pred, target in zip(preds_batch, targets):
             if pred == target:
                 num_correct += 1
         accuracy.update(num_correct / num_verified)
@@ -370,6 +374,9 @@ def validate(dev_loader, model, epoch, converter, writer):
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Accu {accuracy.val:.3f}'.format(
                 epoch + 1, i + 1, len(dev_loader), batch_time=batch_time, accuracy=accuracy))
+
+    # write epoch val acc to tensorboard
+    writer.add_scalar('valid/accuracy', accuracy.avg, epoch)
 
     return accuracy.val
 
